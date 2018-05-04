@@ -26,7 +26,7 @@ C = 5 # COUNT
 K = 14 # NUMBER_OF_ATOMS_IN_SUB_DICTIONARY
 S = 4 # SPARSE_LEVEL_CONSTRAINT =
 
-seed(0)
+seed(13)
 
 class params:
     """
@@ -40,13 +40,13 @@ class params:
     
 
 ########################################
-        """ 
-        preprocessing methods
-        include
-            - normalize method
-            - read picture as ndarray methods
-            - R generation
-        """
+#        """ 
+#        preprocessing methods
+#        include
+#            - normalize method
+#            - read picture as ndarray methods
+#            - R generation
+#        """
 ########################################
 
 def dict_normalization(data):
@@ -116,9 +116,9 @@ def read_pic_as_dict():
     return data, label, R
 
 ########################################
-        """ 
-        initilization methods
-        """
+ #       """ 
+ #       initilization methods
+ #       """
 ########################################
         
 def initilize_dict(data):
@@ -180,10 +180,10 @@ def get_class_assignment(data, clustered_labels, number_of_classes):
     return class_assignment    
 
 ########################################
-        """ 
-        judge methods
-        
-        """
+#        """ 
+#        judge methods
+#        
+#        """
 ########################################
         
 def score_of_accuracy(true_labels, clustered_labels):
@@ -217,10 +217,10 @@ def score_of_accuracy(true_labels, clustered_labels):
 
 
 ########################################
-        """ 
-        learning methods
-        
-        """
+#""" 
+#        learning methods
+#        
+#"""
 ########################################
 
 
@@ -325,8 +325,13 @@ def fisher_discriminantor(class_assignment, params):
         Alpha = []
         for j in range(C):
             omp = OMP(S)
-            omp.fit(D[j], class_assignment[j])
-            Alpha.append(omp.coef_.T)
+        
+            try:
+                omp.fit(D[j], class_assignment[j])
+                Alpha.append(omp.coef_.T)
+            except:
+                Alpha.append(Alpha[-1])
+            
             
         Q = np.zeros((n, C*K))
         for j in range(C):
@@ -383,21 +388,69 @@ def assemble(data_dict, x, S):
     return min_loc
     
 
-def loop_face_learning(data, data_dict, class_assignment, S, theta1, theta2):
+def loop_face_learning(data, data_dict, class_assignment, params, score):
     """
     """
     iteration_number= 80
     finished = 0
     locked = 0
     
-    aaa, _ = show_energy(data_dict, class_assignment, S, params.theta1, params.theta2)
+    acc_arr = []
+    
+    energy = np.zeros((iteration_number, 1))
+    values = np.zeros((iteration_number, 4))
+    
+    aaa, _ = show_energy(data_dict, class_assignment, params.S, params.theta1, params.theta2)
 
     for it in range(iteration_number):
+        
         dic_cid = fisher_discriminantor(class_assignment, params)
 
-        T = [assemble(data_dict, data[:,i], 4) for i in range(316)]
+        T = [assemble(dic_cid, data[:,i], 4) for i in range(316)]
         
-        score_of_accuracy(img_label, T)
+        class_assignment = get_class_assignment(data, T, C)
+        
+        acc_arr.append(score_of_accuracy(img_label, T))
+        
+        energy[it],values[it,:]  = show_energy(data_dict, class_assignment, 4, params.theta1, params.theta2)
+        
+        bbb = energy[-1]
+        
+        bbb_minus_aaa = abs((bbb-aaa)/bbb)
+        
+        if bbb_minus_aaa < 0.004:
+            if finished < 2:
+                finished += 1
+            else:
+                if params.theta2 < 28:
+                    params.theta1 += 0.4
+                    params.theta2 += 2
+                    finished = 0
+                else:
+                    break
+        elif bbb_minus_aaa < 0.04:
+            finished = 0
+            if locked < 3:
+                locked += 1
+            else:
+                if params.theta2 < 28:
+                    params.theta1 += 0.4
+                    params.theta2 += 2
+                    params.finished = 0
+                else:
+                    break
+        else:
+            locked = 0
+            finished = 0 
+        
+        aaa = bbb
+        
+        print('the precision is ' + str(acc_arr[-1]) )
+        score.append(acc_arr[-1])
+        
+        
+        
+        
 
 
 if __name__ == '__main__':
@@ -414,4 +467,4 @@ if __name__ == '__main__':
     
     score.append(score_of_accuracy(img_label, cluster_label))
     
-    
+    loop_face_learning(img_data, data_dict,class_assignment, params, score)
