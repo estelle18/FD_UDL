@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu May  3 09:59:52 2018
+Created on Sat May  5 22:16:58 2018
 
-@author: ning
+@author: estella_shu
 """
 
 import numpy as np
@@ -49,18 +48,18 @@ class params:
 #            - R generation
 #        """
 ########################################
+#
+#def dict_normalization(data):
+#    """
+#        normalize dict data
+#        Args:
+#            data: data to be normalized
+#        return:
+#            data: normalized data
+#    """
+#    return normalize(data,axis=0)
 
 def dict_normalization(data):
-    """
-        normalize dict data
-        Args:
-            data: data to be normalized
-        return:
-            data: normalized data
-    """
-    return normalize(data,axis=0)
-
-def normalize(data):
     datadata = data * data
     shit_data= datadata.sum(axis = 0)
     shit_data = np.expand_dims(shit_data, 1)
@@ -68,7 +67,7 @@ def normalize(data):
     shit_data = [np.math.sqrt(i) for i in shit_data]
 
     data = data.dot(1/shit_data)
-    
+    return data
     
 
 
@@ -495,9 +494,6 @@ def whole_process():
 
 
 if __name__ == '__main__':
-#    score_arr = [whole_process(i) for i in range(10)]
-    
-    for i in range(1, 100):
-        print('current seed is' + str(i))
-        whole_process()
+    img_data, img_label, R = read_pic_as_dict()
+    img_data = dict_normalization(img_data)
     
