@@ -26,14 +26,16 @@ C = 5 # COUNT
 K = 14 # NUMBER_OF_ATOMS_IN_SUB_DICTIONARY
 S = 4 # SPARSE_LEVEL_CONSTRAINT =
 
-seed(13)
+seed(4)
 
+# 13  69
+#
 class params:
     """
     param used
     """
     theta1 = 0
-    theta2 = 0.2
+    theta2 = 0
     S = 4
     K = 14
     numIteration = 80
@@ -57,7 +59,7 @@ def dict_normalization(data):
         return:
             data: normalized data
     """
-    return normalize(data)
+    return normalize(data, axis = 0)
 
 def generate_R():
     """
@@ -68,8 +70,7 @@ def generate_R():
     """
     R = np.random.randn(FEATURES_OF_FACE, WIDTH_OF_IMAGE * HEIGHT_OF_IMAGE)
 
-    row_sums = R.sum(axis = 1)
-    R = R / row_sums[:, np.newaxis]
+    R = dict_normalization(R)
     return R
 
 
@@ -110,9 +111,7 @@ def read_pic_as_dict():
         tmp_doc_product = np.dot(R, np.array([pic_im]).T)
         
         data = np.append(data, tmp_doc_product, axis = 1)
-    
-    print(data.shape)    
-    
+        
     return data, label, R
 
 ########################################
@@ -152,7 +151,7 @@ def cluster_data_with_dict(data, dict_of_data):
         for i in range(C):
             omp = OMP(n_nonzero_coefs=S)
             omp.fit(dict_of_data[i], data[:,t])
-            a = omp.coef_
+            a = omp.coef_.T
             temp[i] = sum(abs(data[:,t] - dict_of_data[i].dot(a)))
         
         min_loc = temp.argmin(axis = 0)
@@ -245,7 +244,7 @@ def show_energy(cluster_dict, class_assignment, S, theta1, theta2):
         
         err = class_assignment[i] - cluster_dict[i].dot(Acoff.T)
     
-        energy_r = energy_r + (err ** 2).sum(axis=0).sum(axis=0)
+        energy_r = energy_r + (err ** 2).sum()
         
     c = np.zeros((n, C))
     
@@ -253,21 +252,21 @@ def show_energy(cluster_dict, class_assignment, S, theta1, theta2):
         c[:,i] = cluster_dict[i].mean(axis=1) 
         
         err = cluster_dict[i] - np.kron(np.ones((1,K)).T, c[:,i]).T
-        energy_d1 = energy_d1 + (err ** 2).sum(axis=0).sum(axis=0)
+        energy_d1 = energy_d1 + (err ** 2).sum()
 
 
     mean_of_c = c.mean(axis = 1)
     
     err = c - np.kron(np.ones((1, C)).T, mean_of_c).T
-    
-    energy_d2 = 14 * ( (err ** 2).sum(axis = 0).sum(axis = 0))
+
+    energy_d2 = 14 * ((err ** 2).sum())
     
     energy_d = theta1*energy_d1 - theta2*energy_d2
 
     energy = energy_r + energy_d
     
     values = np.array([energy_r, energy_d1, energy_d2, energy_d])
-    
+        
     return energy, values
 
 
@@ -317,7 +316,7 @@ def fisher_discriminantor(class_assignment, params):
     for i in range(C):
         r = np.zeros((C*K, 1))
         r[i*K:(i+1)*K] = 1
-        P2 = P2 + (r -s ) * (r -s). T
+        P2 = P2 + (r -s ).dot((r -s). T)
         
     T = theta1 * P1 - theta2 * P2
     
@@ -326,28 +325,26 @@ def fisher_discriminantor(class_assignment, params):
         for j in range(C):
             omp = OMP(S)
         
-            try:
-                omp.fit(D[j], class_assignment[j])
-                Alpha.append(omp.coef_.T)
-            except:
-                Alpha.append(Alpha[-1])
+            omp.fit(D[j], class_assignment[j])
             
+            Alpha.append(omp.coef_.T)
             
         Q = np.zeros((n, C*K))
-        for j in range(C):
-            Q[:,j*K:(j+1)*K] = class_assignment[j].dot(Alpha[j].T)
+        for jj in range(C):
+            Q[:,jj*K:(jj+1)*K] = class_assignment[jj].dot(Alpha[jj].T)
+         
             
         A = np.zeros((C*K, C*K))    
-        for j in range(C):
-            A[j*K:(j+1)*K, j*K:(j+1)*K] - Alpha[j].dot(Alpha[j].T)
+        for jjj in range(C):
+            A[jjj*K:(jjj+1)*K, jjj*K:(jjj+1)*K] = Alpha[jjj].dot(Alpha[jjj].T)
         
         W = A + T
-        
-        if np.linalg.matrix_rank(W) :            
-            DO = np.dot(Q, np.linalg.pinv(W))
+                
+        if np.linalg.matrix_rank(W) == 0:            
+            DO = np.linalg.solve(W.T, Q.T).T
 
         else:
-            DO = np.dot(Q, np.linalg.inv(W))
+            DO = np.dot(Q, np.linalg.pinv(W))
                 
         DO[np.where(np.isnan(DO)==1)] = 0
         DO[np.where(np.isinf(DO)==1)] = 10**20
@@ -358,12 +355,12 @@ def fisher_discriminantor(class_assignment, params):
             D[j] = DO[:,j*K:(j+1)*K]
         
         bbb, _ = show_energy(D, class_assignment, S, theta1, theta2)
-        
+                
         if abs((bbb-aaa)/ bbb) < 0.002:
             if finished < 1:
                 finished += 1
             else:
-                print('current iternum is %s', i)
+                pass
         else:
             finished = 0
             
@@ -414,17 +411,17 @@ def loop_face_learning(data, data_dict, class_assignment, params, score):
         
         energy[it],values[it,:]  = show_energy(data_dict, class_assignment, 4, params.theta1, params.theta2)
         
-        bbb = energy[-1]
+        bbb = energy[it]
         
         bbb_minus_aaa = abs((bbb-aaa)/bbb)
-        
+                
         if bbb_minus_aaa < 0.004:
             if finished < 2:
                 finished += 1
             else:
-                if params.theta2 < 28:
+                if params.theta2 < 36:
                     params.theta1 += 0.4
-                    params.theta2 += 2
+                    params.theta2 += 1
                     finished = 0
                 else:
                     break
@@ -433,9 +430,9 @@ def loop_face_learning(data, data_dict, class_assignment, params, score):
             if locked < 3:
                 locked += 1
             else:
-                if params.theta2 < 28:
+                if params.theta2 < 36:
                     params.theta1 += 0.4
-                    params.theta2 += 2
+                    params.theta2 += 1
                     params.finished = 0
                 else:
                     break
@@ -445,8 +442,8 @@ def loop_face_learning(data, data_dict, class_assignment, params, score):
         
         aaa = bbb
         
-        print('the precision is ' + str(acc_arr[-1]) )
-        score.append(acc_arr[-1])
+        print('iter %d \n  the precision is ' % it + str(acc_arr[it]) )
+        score.append(acc_arr[it])
         
         
         
